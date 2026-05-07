@@ -212,9 +212,7 @@ void processDelivery() {
     }
     
     /* Remove from registry (without double free) */
-    if (delivered->prev) delivered->prev->next = delivered->next;
-    if (delivered->next) delivered->next->prev = delivered->prev;
-    if (registry == delivered) registry = delivered->next;
+    deletePackage(delivered->id);
     
     free(delivered);
     printf("--> Delivery complete! Removed from system.\n");
