@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #define MAX_HISTORY 100
 
@@ -44,6 +45,79 @@ void initStack() {
     history.top = -1;
 }
 
+int readInt(const char *prompt, int *value) {
+    char line[100];
+    char *endptr;
+    long temp;
+
+    while (1) {
+        printf("%s", prompt);
+        if (!fgets(line, sizeof(line), stdin)) return 0;
+
+        line[strcspn(line, "\n")] = 0;
+
+        if (line[0] == '\0') {
+            printf("--> Invalid input. Please enter a number.\n");
+            continue;
+        }
+
+        errno = 0;
+        temp = strtol(line, &endptr, 10);
+
+        if (errno != 0 || endptr == line || *endptr != '\0') {
+            printf("--> Invalid input. Please enter a number.\n");
+            continue;
+        }
+
+        *value = (int)temp;
+        return 1;
+    }
+}
+
+int readFloat(const char *prompt, float *value) {
+    char line[100];
+    char *endptr;
+    float temp;
+
+    while (1) {
+        printf("%s", prompt);
+        if (!fgets(line, sizeof(line), stdin)) return 0;
+
+        line[strcspn(line, "\n")] = 0;
+
+        if (line[0] == '\0') {
+            printf("--> Invalid input. Please enter a valid number.\n");
+            continue;
+        }
+
+        errno = 0;
+        temp = strtof(line, &endptr);
+
+        if (errno != 0 || endptr == line || *endptr != '\0') {
+            printf("--> Invalid input. Please enter a valid number.\n");
+            continue;
+        }
+
+        *value = temp;
+        return 1;
+    }
+}
+
+void readString(const char *prompt, char *buffer, int size) {
+    while (1) {
+        printf("%s", prompt);
+        if (!fgets(buffer, size, stdin)) return;
+
+        buffer[strcspn(buffer, "\n")] = 0;
+
+        if (buffer[0] == '\0') {
+            printf("--> Destination cannot be empty.\n");
+            continue;
+        }
+        break;
+    }
+}
+
 /* ========================== ALGORITHM 1: LINEAR SEARCH ========================== */
 Package* findPackage(int id) {
     Package *curr = registry;
@@ -61,15 +135,14 @@ void registerPackage(int id, char *dest, float weight, int priority) {
         printf("--> ERROR: ID %d already exists!\n", id);
         return;
     }
-    
+
     Package *newPkg = (Package*)malloc(sizeof(Package));
     newPkg->id = id;
     strcpy(newPkg->dest, dest);
     newPkg->weight = weight;
     newPkg->priority = priority;
     newPkg->next = newPkg->prev = NULL;
-    
-    /* Insert at end of list */
+
     if (!registry) {
         registry = newPkg;
     } else {
@@ -87,13 +160,12 @@ void deletePackage(int id) {
         printf("--> Package %d not found.\n", id);
         return;
     }
-    
-    /* Relink neighbors */
+
     if (pkg->prev) pkg->prev->next = pkg->next;
     else registry = pkg->next;
-    
+
     if (pkg->next) pkg->next->prev = pkg->prev;
-    
+
     free(pkg);
     printf("--> Package %d deleted.\n", id);
 }
@@ -103,13 +175,13 @@ void displayRegistry() {
         printf("--> Registry is empty.\n");
         return;
     }
-    
+
     Package *curr = registry;
     printf("\n%-8s | %-20s | %-8s | %-10s\n", "ID", "Destination", "Weight", "Priority");
     printf("------------------------------------------------------------\n");
     while (curr) {
-        printf("%-8d | %-20s | %-8.2f | %-10d\n", 
-               curr->id, curr->dest, curr->weight, curr->priority);
+        printf("%-8d | %-20s | %-8.2f | %-10d\n",
+                curr->id, curr->dest, curr->weight, curr->priority);
         curr = curr->next;
     }
 }
@@ -120,15 +192,15 @@ void sortRegistry() {
         printf("--> Not enough packages to sort.\n");
         return;
     }
-    
+
     int swapped;
     Package *curr;
     Package *last = NULL;
-    
+
     do {
         swapped = 0;
         curr = registry;
-        
+
         while (curr->next != last) {
             if (curr->id > curr->next->id) {
                 /* Swap data only (simpler than relinking) */
@@ -136,33 +208,32 @@ void sortRegistry() {
                 char tempDest[100];
                 float tempWeight = curr->weight;
                 int tempPrio = curr->priority;
-                
+
                 strcpy(tempDest, curr->dest);
-                
+
                 curr->id = curr->next->id;
                 strcpy(curr->dest, curr->next->dest);
                 curr->weight = curr->next->weight;
                 curr->priority = curr->next->priority;
-                
+
                 curr->next->id = tempId;
                 strcpy(curr->next->dest, tempDest);
                 curr->next->weight = tempWeight;
                 curr->next->priority = tempPrio;
-                
+
                 swapped = 1;
             }
             curr = curr->next;
         }
         last = curr;
     } while (swapped);
-    
+
     printf("--> Registry sorted by ID!\n");
 }
 
 /* ========================== PRIORITY QUEUE OPERATIONS ========================== */
 
 void enqueuePackage(Package *pkg) {
-    /* Prevent duplicate queuing */
     Package *curr = dispatch;
     while (curr) {
         if (curr->id == pkg->id) {
@@ -171,12 +242,11 @@ void enqueuePackage(Package *pkg) {
         }
         curr = curr->next;
     }
-    
+
     Package *newPkg = (Package*)malloc(sizeof(Package));
-    *newPkg = *pkg;  /* Copy data */
+    *newPkg = *pkg;
     newPkg->next = newPkg->prev = NULL;
-    
-    /* Priority insertion (1 is highest = goes to front) */
+
     if (!dispatch || dispatch->priority > newPkg->priority) {
         newPkg->next = dispatch;
         if (dispatch) dispatch->prev = newPkg;
@@ -199,33 +269,30 @@ void processDelivery() {
         printf("--> No packages in dispatch queue.\n");
         return;
     }
-    
+
     Package *delivered = dispatch;
     dispatch = dispatch->next;
     if (dispatch) dispatch->prev = NULL;
-    
+
     printf("\n[DELIVERING] Package %d to %s...\n", delivered->id, delivered->dest);
-    
-    /* Push to history stack */
+
     if (history.top < MAX_HISTORY - 1) {
         history.ids[++history.top] = delivered->id;
     }
-    
-    /* Remove from registry (without double free) */
+
     deletePackage(delivered->id);
-    
+
     free(delivered);
     printf("--> Delivery complete! Removed from system.\n");
 }
 
 /* ========================== STACK OPERATIONS (HISTORY) ========================== */
-
 void viewHistory() {
     if (history.top == -1) {
         printf("--> No deliveries yet.\n");
         return;
     }
-    
+
     printf("\n=== RECENT DELIVERIES (Latest First) ===\n");
     for (int i = history.top; i >= 0; i--) {
         printf("  Delivered: Package #%d\n", history.ids[i]);
@@ -233,7 +300,6 @@ void viewHistory() {
 }
 
 /* ========================== MEMORY CLEANUP ========================== */
-
 void freeMemory() {
     Package *temp;
     while (registry) {
@@ -250,14 +316,15 @@ void freeMemory() {
 }
 
 /* ========================== MAIN MENU ========================== */
-
 int main() {
     int choice, id, priority;
     float weight;
     char dest[100];
-    
+    Package *found;
+    Package *toQueue;
+
     initStack();
-    
+
     do {
         printf("\n=========================================\n");
         printf("  COURIER & DELIVERY MANAGEMENT SYSTEM   \n");
@@ -271,31 +338,54 @@ int main() {
         printf("7. Sort Registry by ID\n");
         printf("8. Delete Package\n");
         printf("0. Exit\n");
-        printf("Choice: ");
-        
-        if (scanf("%d", &choice) != 1) {
-            clearBuffer();
+
+        if (!readInt("Choice: ", &choice)) {
             printf("--> Invalid input.\n");
             continue;
         }
-        
+
         switch(choice) {
-            case 1:
-                printf("ID: "); scanf("%d", &id);
-                printf("Destination: "); clearBuffer(); fgets(dest, 100, stdin);
-                dest[strcspn(dest, "\n")] = 0;
-                printf("Weight (kg): "); scanf("%f", &weight);
-                printf("Priority (1=Express,2=Standard,3=Economy): "); scanf("%d", &priority);
-                registerPackage(id, dest, weight, priority);
+            case 1: {
+                if (!readInt("ID: ", &id)) {
+                    printf("--> Invalid input.\n");
+                    break;
+                }
+
+                readString("Destination: ", dest, sizeof(dest));
+
+                if (!readFloat("Weight (kg): ", &weight)) {
+                    printf("--> Invalid input.\n");
+                    break;
+                }
+
+                while (1) {
+                    if (!readInt("Priority (1=Express,2=Standard,3=Economy): ", &priority)) {
+                        printf("--> Invalid input.\n");
+                        break;
+                    }
+
+                    if (priority < 1 || priority > 3) {
+                        printf("--> Invalid priority. Please choose only 1, 2, or 3.\n");
+                        continue;
+                    }
+
+                    registerPackage(id, dest, weight, priority);
+                    break;
+                }
                 break;
-                
+            }
+
             case 2:
                 displayRegistry();
                 break;
-                
-            case 3:
-                printf("Enter ID to search: "); scanf("%d", &id);
-                Package *found = findPackage(id);
+
+            case 3: {
+                if (!readInt("Enter ID to search: ", &id)) {
+                    printf("--> Invalid input.\n");
+                    break;
+                }
+
+                found = findPackage(id);
                 if (found) {
                     printf("\n--- PACKAGE FOUND ---\n");
                     printf("ID: %d\nDestination: %s\nWeight: %.2f kg\nPriority: %d\n",
@@ -304,41 +394,52 @@ int main() {
                     printf("--> Package %d not found.\n", id);
                 }
                 break;
-                
-            case 4:
-                printf("Enter ID to queue: "); scanf("%d", &id);
-                Package *toQueue = findPackage(id);
+            }
+
+            case 4: {
+                if (!readInt("Enter ID to queue: ", &id)) {
+                    printf("--> Invalid input.\n");
+                    break;
+                }
+
+                toQueue = findPackage(id);
                 if (toQueue) enqueuePackage(toQueue);
                 else printf("--> Package %d not in registry.\n", id);
                 break;
-                
+            }
+
             case 5:
                 processDelivery();
                 break;
-                
+
             case 6:
                 viewHistory();
                 break;
-                
+
             case 7:
                 sortRegistry();
                 displayRegistry();
                 break;
-                
-            case 8:
-                printf("Enter ID to delete: "); scanf("%d", &id);
+
+            case 8: {
+                if (!readInt("Enter ID to delete: ", &id)) {
+                    printf("--> Invalid input.\n");
+                    break;
+                }
+
                 deletePackage(id);
                 break;
-                
+            }
+
             case 0:
                 printf("Shutting down...\n");
                 freeMemory();
                 break;
-                
+
             default:
                 printf("--> Invalid choice.\n");
         }
     } while (choice != 0);
-    
+
     return 0;
 }
